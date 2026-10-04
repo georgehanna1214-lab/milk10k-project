@@ -1,0 +1,4 @@
+diagnosis_1,train,val,test,global,max_abs_dev_pp
+Malignant,69.21,69.76,69.59,69.35,0.41
+Benign,28.28,28.46,28.24,28.3,0.16
+Indeterminate,2.51,1.78,2.16,2.35,0.57

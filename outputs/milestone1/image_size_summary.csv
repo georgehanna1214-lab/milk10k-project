@@ -1,0 +1,11 @@
+statistic,value
+n_images,10480.0
+n_unreadable,0.0
+width_min,600.0
+width_median,600.0
+width_max,600.0
+height_min,450.0
+height_median,450.0
+height_max,450.0
+pct_larger_than_224,100.0
+pct_larger_than_256,100.0

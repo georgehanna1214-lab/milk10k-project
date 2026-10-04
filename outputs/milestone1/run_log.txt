@@ -1,0 +1,155 @@
+
+=== B1: full-dataset integrity ===
+metadata rows without an image file: 0 []
+Image.verify() on 10,480 images: 0 unreadable (1 s)
+          statistic   value
+           n_images 10480.0
+       n_unreadable     0.0
+          width_min   600.0
+       width_median   600.0
+          width_max   600.0
+         height_min   450.0
+      height_median   450.0
+         height_max   450.0
+pct_larger_than_224   100.0
+pct_larger_than_256   100.0
+
+=== B2: label-centred EDA ===
+11-class -> diagnosis_1 (lesions):
+ diagnosis_1  Benign  Indeterminate  Malignant  n_diagnosis_1_values
+dx                                                                 
+AKIEC             0            123        180                     2
+BCC               0              0       2522                     1
+BEN_OTH          44              0          0                     1
+BKL             544              0          0                     1
+DF               52              0          0                     1
+INF              50              0          0                     1
+MAL_OTH           0              0          9                     1
+MEL               0              0        450                     1
+NV              746              0          0                     1
+SCCKA             0              0        473                     1
+VASC             47              0          0                     1
+re-checking Session 2 findings on the full dataset (colour of all 10,480 images) ...
+                                                                                    Session 2 finding                                                                                                         Still true on the full dataset?                                                                                                                                Consequence for the pipeline
+                             Age differs strongly by class (Kruskal-Wallis; nevi from young patients)                                                                                               yes: median age NV 40 vs BCC 65, SCCKA 70 age is NOT an input of the image pipeline; stratified splits keep the age mix similar; check later that the model does not just learn 'young skin = benign'
+Six columns leak the label (diagnosis_2/3/4, melanocytic, diagnosis_confirm_type, concomitant_biopsy)                                                                                            yes (they are label-derived by construction)                                                                        excluded from model inputs; the split CSVs carry only ids, image_type and the labels
+                                  image_manipulation = 'altered' is enriched in Indeterminate lesions                                                                                                        yes: 12.8% vs 2.0% Indeterminate                                                                   possible acquisition shortcut: not an input; report metrics separately for altered images
+                        Colour alone separates Malignant from Benign only weakly (sample AUC <= 0.66)                                                                                 yes, on all 10,480 images: best single-feature AUC 0.67                                                                           a CNN must learn spatial patterns; colour augmentation stays mild (no hue jitter)
+                  Dermoscopic images are much bluer than clinical ones (device effect > class effect)                                                                                         yes: mean B 137 (dermoscopic) vs 106 (clinical)                               both images of a lesion go to the same split, so every split has both types in equal numbers; evaluate per image type as well
+                                                    A missing body site goes with more Benign lesions yes: 34.5% Benign when missing vs 28.3% overall; explained: 3,850 of the 3,912 'missing' images are trunk lesions in training_input.csv                                                         missing is not random: if site is used, recover 'trunk' from training_input.csv, the rest 'unknown'
+
+=== B3: label strategy ===
+saved artifacts/label_map.json; dx10 lesion counts: {'BCC': 2522, 'NV': 746, 'BKL': 544, 'SCCKA': 473, 'MEL': 450, 'AKIEC': 303, 'OTHER': 53, 'DF': 52, 'INF': 50, 'VASC': 47}
+
+=== B4: data-quality report ===
+# Data-quality report (Milestone 1)
+
+## 1. Missing values: handling decision per column
+
+| column | missing | pct | decision |
+|---|---|---|---|
+| anatom_site_special | 10274 | 98.0 | drop: 98% missing, negligible association |
+| diagnosis_4 | 8958 | 85.5 | leave NaN: label hierarchy, never an input (most lesions stop at level 2/3) |
+| melanocytic | 8088 | 77.2 | drop: leaks the label (NaN means 'not melanocytic') |
+| anatom_site_general | 3912 | 37.3 | recover: 3,850 of the 3,912 missing images are 'trunk' in supplements/training_input.csv (the column has no trunk category); the other 62 -> explicit 'unknown' |
+| diagnosis_3 | 158 | 1.5 | leave NaN: label hierarchy, never an input |
+| age_approx | 40 | 0.4 | impute with the TRAIN median when used as a feature (0.4% missing, 20 lesions) |
+
+## 2. Label-consistency checks
+
+| check | result | detail |
+|---|---|---|
+| every lesion has exactly 2 images | PASS | 0 lesions violate |
+| one dermoscopic + one clinical image per lesion | PASS | 0 lesions violate |
+| diagnosis/age/sex/site identical for both images | PASS | columns that vary: none |
+
+## 3. Suspicious shortcuts (row % of diagnosis_1, per image)
+
+**image_manipulation**
+
+| image_manipulation | Benign | Indeterminate | Malignant | n_images |
+|---|---|---|---|---|
+| altered | 39.7 | 12.8 | 47.5 | 335.0 |
+| instrument only | 27.9 | 2.0 | 70.1 | 10145.0 |
+
+**image_type**
+
+| image_type | Benign | Indeterminate | Malignant | n_images |
+|---|---|---|---|---|
+| clinical: close-up | 28.3 | 2.3 | 69.4 | 5240.0 |
+| dermoscopic | 28.3 | 2.3 | 69.4 | 5240.0 |
+
+Conclusion: `image_type` carries no label information (every lesion has one image of each type). `image_manipulation = altered` (335 images) is 12.8% Indeterminate vs 2.0% overall: it describes how the picture was taken or edited, can stand for a clinic or protocol, and is NOT used as an input. Both fields stay available for error analysis (does the model behave differently on altered images?).
+
+## 4. Columns never used as model inputs (they leak the label)
+
+- `diagnosis_2`: finer level of the label itself
+- `diagnosis_3`: finer level of the label itself
+- `diagnosis_4`: finer level of the label itself
+- `melanocytic`: True exactly for NV and MEL (derived from the diagnosis)
+- `diagnosis_confirm_type`: says whether the lesion was biopsied: decided because of the suspected diagnosis
+- `concomitant_biopsy`: identical to diagnosis_confirm_type
+- also not inputs: `isic_id`, `lesion_id` (identifiers), `attribution`, `copyright_license` (constant)
+
+
+=== B5: splits ===
+zero lesion overlap between every pair of splits: OK
+train: 3,667 lesions (70.0%), 7,334 images, exactly 2 per lesion (1 dermoscopic + 1 clinical): OK
+val  : 787 lesions (15.0%), 1,574 images, exactly 2 per lesion (1 dermoscopic + 1 clinical): OK
+test : 786 lesions (15.0%), 1,572 images, exactly 2 per lesion (1 dermoscopic + 1 clinical): OK
+
+class proportions (% of lesions) by split, dx; max deviation from global = 0.21 pp
+          train    val   test  global  max_abs_dev_pp
+dx                                                  
+AKIEC     5.78   5.72   5.85    5.78            0.07
+BCC      48.13  48.03  48.22   48.13            0.10
+BEN_OTH   0.85   0.89   0.76    0.84            0.08
+BKL      10.34  10.55  10.43   10.38            0.16
+DF        0.98   1.02   1.02    0.99            0.03
+INF       0.95   0.89   1.02    0.95            0.06
+MAL_OTH   0.16   0.38   0.00    0.17            0.21
+MEL       8.59   8.51   8.65    8.59            0.07
+NV       14.26  14.10  14.25   14.24            0.13
+SCCKA     9.05   8.89   9.03    9.03            0.13
+VASC      0.90   1.02   0.76    0.90            0.13
+
+class proportions (% of lesions) by split, diagnosis_1; max deviation from global = 0.57 pp
+                train    val   test  global  max_abs_dev_pp
+diagnosis_1                                               
+Malignant      69.21  69.76  69.59   69.35            0.41
+Benign         28.28  28.46  28.24   28.30            0.16
+Indeterminate   2.51   1.78   2.16    2.35            0.57
+
+seed 42, created 2026-10-04
+
+=== B6-B7: normalisation statistics (train only) and augmentation ===
+norm stats from 7,334 TRAIN images: mean [0.6846, 0.527, 0.477] std [0.1224, 0.131, 0.1523]
+train_transform: Compose(
+    RandomResizedCrop(size=(224, 224), scale=(0.75, 1.0), ratio=(0.75, 1.3333), interpolation=bilinear, antialias=True)
+    RandomHorizontalFlip(p=0.5)
+    RandomVerticalFlip(p=0.5)
+    RandomRotate90()
+    ColorJitter(brightness=(0.9, 1.1), contrast=(0.9, 1.1), saturation=(0.95, 1.05), hue=None)
+    ToTensor()
+    Normalize(mean=[0.6846, 0.527, 0.477], std=[0.1224, 0.131, 0.1523])
+) 
+eval_transform: Compose(
+    Resize(size=224, interpolation=bilinear, max_size=None, antialias=True)
+    CenterCrop(size=(224, 224))
+    ToTensor()
+    Normalize(mean=[0.6846, 0.527, 0.477], std=[0.1224, 0.131, 0.1523])
+)
+eval_transform applied twice to the same image -> identical tensors: OK
+
+=== B8: datasets and loaders ===
+{'train': 7334, 'val': 1574, 'test': 1572} images
+train class counts: {'Benign': 2074, 'Indeterminate': 184, 'Malignant': 5076} -> imbalance ratio 27.6:1
+class weights (train): {'Benign': 1.179, 'Indeterminate': 13.286, 'Malignant': 0.482}
+missing file -> fails loudly: 1 image files are missing, e.g. ['ISIC_DOES_NOT_EXIST'] (pass allow_missing=True to drop them)
+train batch: images (32, 3, 224, 224) torch.float32, min -5.50 max 3.58, labels (32,) torch.int64, ids e.g. ('ISIC_2334810', 'ISIC_4896910')
+val batch: images (32, 3, 224, 224), min -5.59 max 3.61
+label histogram of 20 train batches (plain shuffle): {'Benign': 177, 'Indeterminate': 16, 'Malignant': 447}
+label histogram of 20 train batches (WeightedRandomSampler): {'Benign': 224, 'Indeterminate': 215, 'Malignant': 201}
+one full train epoch: 7,334 images in 4.5 s (batch size 32, 4 workers)
+
+Done. Outputs: figures/milestone1/, outputs/milestone1/, splits/, artifacts/

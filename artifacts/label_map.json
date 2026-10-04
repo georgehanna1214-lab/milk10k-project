@@ -1,0 +1,34 @@
+{
+  "target": "diagnosis_1",
+  "diagnosis_1": {
+    "Benign": 0,
+    "Indeterminate": 1,
+    "Malignant": 2
+  },
+  "needs_action": {
+    "Benign": 0,
+    "Indeterminate": 1,
+    "Malignant": 1
+  },
+  "dx_merge": {
+    "BEN_OTH": "OTHER",
+    "MAL_OTH": "OTHER"
+  },
+  "dx10": {
+    "AKIEC": 0,
+    "BCC": 1,
+    "BKL": 2,
+    "DF": 3,
+    "INF": 4,
+    "MEL": 5,
+    "NV": 6,
+    "OTHER": 7,
+    "SCCKA": 8,
+    "VASC": 9
+  },
+  "notes": {
+    "diagnosis_1": "primary target; Indeterminate kept as a 3rd class (all are actinic keratoses)",
+    "needs_action": "secondary clinical view: Malignant or Indeterminate = needs treatment/biopsy",
+    "dx10": "11-class stretch goal with BEN_OTH + MAL_OTH merged into OTHER (= refer)"
+  }
+}

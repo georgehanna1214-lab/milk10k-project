@@ -1,0 +1,7 @@
+Session 2 finding,Still true on the full dataset?,Consequence for the pipeline
+Age differs strongly by class (Kruskal-Wallis; nevi from young patients),"yes: median age NV 40 vs BCC 65, SCCKA 70",age is NOT an input of the image pipeline; stratified splits keep the age mix similar; check later that the model does not just learn 'young skin = benign'
+"Six columns leak the label (diagnosis_2/3/4, melanocytic, diagnosis_confirm_type, concomitant_biopsy)",yes (they are label-derived by construction),"excluded from model inputs; the split CSVs carry only ids, image_type and the labels"
+image_manipulation = 'altered' is enriched in Indeterminate lesions,yes: 12.8% vs 2.0% Indeterminate,possible acquisition shortcut: not an input; report metrics separately for altered images
+Colour alone separates Malignant from Benign only weakly (sample AUC <= 0.66),"yes, on all 10,480 images: best single-feature AUC 0.67",a CNN must learn spatial patterns; colour augmentation stays mild (no hue jitter)
+Dermoscopic images are much bluer than clinical ones (device effect > class effect),yes: mean B 137 (dermoscopic) vs 106 (clinical),"both images of a lesion go to the same split, so every split has both types in equal numbers; evaluate per image type as well"
+A missing body site goes with more Benign lesions,"yes: 34.5% Benign when missing vs 28.3% overall; explained: 3,850 of the 3,912 'missing' images are trunk lesions in training_input.csv","missing is not random: if site is used, recover 'trunk' from training_input.csv, the rest 'unknown'"

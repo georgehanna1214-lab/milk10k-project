@@ -1,0 +1,12 @@
+dx,Benign,Indeterminate,Malignant,n_diagnosis_1_values
+AKIEC,0,123,180,2
+BCC,0,0,2522,1
+BEN_OTH,44,0,0,1
+BKL,544,0,0,1
+DF,52,0,0,1
+INF,50,0,0,1
+MAL_OTH,0,0,9,1
+MEL,0,0,450,1
+NV,746,0,0,1
+SCCKA,0,0,473,1
+VASC,47,0,0,1

@@ -1,0 +1,14 @@
+{
+  "classes": [
+    "Benign",
+    "Indeterminate",
+    "Malignant"
+  ],
+  "weights": [
+    1.1787,
+    13.2862,
+    0.4816
+  ],
+  "formula": "n_train / (n_classes * count_in_train)",
+  "computed_on": "train split only"
+}
