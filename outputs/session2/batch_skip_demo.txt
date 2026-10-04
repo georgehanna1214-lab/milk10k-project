@@ -1,0 +1,3 @@
+processed 3 image(s), skipped 2
+  skipped ISIC_DOES_NOT_EXIST: FileNotFoundError: image file not found: /Users/georgehanna/Desktop/milk10k-project/data/images/ISIC_DOES_NOT_EXIST.jpg
+  skipped corrupt_example: UnidentifiedImageError: cannot identify image file '/Users/georgehanna/Desktop/milk10k-project/outputs/session2/corrupt_example.jpg'

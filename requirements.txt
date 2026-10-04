@@ -1,0 +1,11 @@
+# Tested with Python 3.11 and the versions in brackets.
+numpy>=2.0          # (2.4)
+pandas>=2.2         # (3.0)
+matplotlib>=3.8     # (3.11)
+pillow>=10.0        # (12.3)
+scipy>=1.11         # (1.17)  chi-square, Kruskal-Wallis, ANOVA
+scikit-learn>=1.4   # (1.9)   ROC-AUC
+pytest>=8.0         #         tests
+
+# the project's own code (milk10k/ package), installed in editable mode
+-e .

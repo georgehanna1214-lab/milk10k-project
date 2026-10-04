@@ -1,0 +1,15 @@
+column,kind,n_unique,missing,pct_missing,level,example_values
+attribution,constant,1,0,0.0,lesion,MILK study team
+copyright_license,constant,1,0,0.0,lesion,CC-BY-NC
+age_approx,numeric,17,40,0.4,lesion,70.0; 5.0; 10.0
+anatom_site_general,categorical,4,3912,37.3,lesion,upper extremity; head/neck; lower extremity
+anatom_site_special,categorical,2,10274,98.0,lesion,acral NOS; oral or genital
+concomitant_biopsy,boolean,2,0,0.0,lesion,True; False
+diagnosis_2,categorical,19,0,0.0,lesion,Malignant epidermal proliferations; Benign melanocytic proliferations; Malignant adnexal epithelial proliferations - Follicular
+diagnosis_3,categorical,27,158,1.5,lesion,"Squamous cell carcinoma, Invasive; Nevus; Basal cell carcinoma"
+diagnosis_4,categorical,15,8958,85.5,lesion,"Nevus, Reed; Nevus, Acral; Squamous cell carcinoma in situ, Bowens disease"
+diagnosis_confirm_type,categorical,2,0,0.0,lesion,histopathology; single contributor clinical assessment
+image_manipulation,categorical,2,0,0.0,image,instrument only; altered
+image_type,categorical,2,0,0.0,image,dermoscopic; clinical: close-up
+melanocytic,boolean,1,8088,77.2,lesion,True
+sex,categorical,2,0,0.0,lesion,male; female

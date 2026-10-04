@@ -1,0 +1,123 @@
+10,480 images, 5,240 lesions
+
+=== PART 1: metadata vs. diagnosis ===
+                column        kind  n_unique  missing  pct_missing  level                                                                                                                  example_values
+           attribution    constant         1        0          0.0 lesion                                                                                                                 MILK study team
+     copyright_license    constant         1        0          0.0 lesion                                                                                                                        CC-BY-NC
+            age_approx     numeric        17       40          0.4 lesion                                                                                                                 70.0; 5.0; 10.0
+   anatom_site_general categorical         4     3912         37.3 lesion                                                                                     upper extremity; head/neck; lower extremity
+   anatom_site_special categorical         2    10274         98.0 lesion                                                                                                      acral NOS; oral or genital
+    concomitant_biopsy     boolean         2        0          0.0 lesion                                                                                                                     True; False
+           diagnosis_2 categorical        19        0          0.0 lesion Malignant epidermal proliferations; Benign melanocytic proliferations; Malignant adnexal epithelial proliferations - Follicular
+           diagnosis_3 categorical        27      158          1.5 lesion                                                                  Squamous cell carcinoma, Invasive; Nevus; Basal cell carcinoma
+           diagnosis_4 categorical        15     8958         85.5 lesion                                                      Nevus, Reed; Nevus, Acral; Squamous cell carcinoma in situ, Bowens disease
+diagnosis_confirm_type categorical         2        0          0.0 lesion                                                                          histopathology; single contributor clinical assessment
+    image_manipulation categorical         2        0          0.0  image                                                                                                        instrument only; altered
+            image_type categorical         2        0          0.0  image                                                                                                 dermoscopic; clinical: close-up
+           melanocytic     boolean         1     8088         77.2 lesion                                                                                                                            True
+                   sex categorical         2        0          0.0 lesion                                                                                                                    male; female
+
+                  field   unit            test     n  statistic_3cls  p_3cls  cramers_v_3cls  cramers_v_11cls strength_3cls
+           diagnosis_2 lesion      chi-square  5240      10480.0000     0.0          1.0000           0.9461        strong
+           diagnosis_3 lesion      chi-square  5240      10440.3234     0.0          0.9981           0.9138        strong
+           melanocytic lesion      chi-square  5240        897.0098     0.0          0.4137           1.0000      moderate
+           diagnosis_4 lesion      chi-square  5240       1698.8691     0.0          0.4026           0.3671      moderate
+    concomitant_biopsy lesion      chi-square  5240        507.1964     0.0          0.3111           0.3132      moderate
+diagnosis_confirm_type lesion      chi-square  5240        507.1964     0.0          0.3111           0.3132      moderate
+            age_approx lesion  Kruskal-Wallis  5220        586.2248     0.0          0.3100           0.2017      moderate
+   anatom_site_general lesion      chi-square  5240        259.9473     0.0          0.1575           0.1677          weak
+    image_manipulation  image      chi-square 10480        201.9817     0.0          0.1388           0.1315          weak
+                   sex lesion      chi-square  5240         45.6467     0.0          0.0933           0.1184    negligible
+   anatom_site_special lesion      chi-square  5240         43.7432     0.0          0.0646           0.1448    negligible
+           attribution lesion none (constant)  5240             NaN     NaN          0.0000           0.0000    negligible
+     copyright_license lesion none (constant)  5240             NaN     NaN          0.0000           0.0000    negligible
+            image_type  image      chi-square 10480          0.0000     1.0          0.0000           0.0000    negligible
+
+age: Kruskal-Wallis H=586.2 p=5.05e-128 eta2_H=0.112 | ANOVA eta2=0.152 | 11-class eta2_H=0.201 ANOVA eta2=0.278
+
+anatom_site_general:
+ diagnosis_1          Benign  Indeterminate  Malignant     n
+anatom_site_general                                        
+(missing)              34.5            0.4       65.2  1956
+head/neck              21.2            6.6       72.2  1491
+lower extremity        31.7            0.7       67.6  1046
+oral/genital           75.0            0.0       25.0     8
+upper extremity        21.0            1.4       77.7   739
+
+image_manipulation:
+ diagnosis_1         Benign  Indeterminate  Malignant      n
+image_manipulation                                         
+altered               39.7           12.8       47.5    335
+instrument only       27.9            2.0       70.1  10145
+
+diagnosis_confirm_type:
+ diagnosis_1                             Benign  Indeterminate  Malignant     n
+diagnosis_confirm_type                                                        
+histopathology                            25.7            2.0       72.3  5016
+single contributor clinical assessment    87.1           10.7        2.2   224
+
+sex:
+ diagnosis_1  Benign  Indeterminate  Malignant     n
+sex                                                
+female         33.2            1.7       65.1  2088
+male           25.0            2.8       72.2  3152
+
+median age per 11-class: {'NV': 40.0, 'DF': 50.0, 'VASC': 55.0, 'BEN_OTH': 60.0, 'INF': 60.0, 'AKIEC': 65.0, 'BCC': 65.0, 'BKL': 65.0, 'MEL': 65.0, 'SCCKA': 70.0, 'MAL_OTH': 75.0}
+
+=== PART 2: colour across classes ===
+                                  n_images    brightness        mean_R        mean_G        mean_B        std_R        std_G        std_B
+image_type         diagnosis_1                                                                                                           
+clinical: close-up Benign              100  145.7 ± 23.2  174.1 ± 22.8  137.1 ± 25.0  115.3 ± 26.7  20.1 ± 14.2  22.2 ± 11.4  22.3 ± 11.7
+                   Indeterminate       100  127.0 ± 22.5  164.6 ± 26.2  114.4 ± 23.0   93.0 ± 22.7  26.6 ± 16.4  25.9 ± 11.6  25.5 ± 10.0
+                   Malignant           100  140.7 ± 17.6  178.1 ± 18.5  128.6 ± 18.7  104.4 ± 21.9  18.1 ± 10.4   22.2 ± 9.5   22.4 ± 9.5
+dermoscopic        Benign              100  147.6 ± 20.2  167.0 ± 22.4  139.5 ± 21.2  138.9 ± 22.5  24.1 ± 13.0  31.2 ± 14.9  35.1 ± 16.9
+                   Indeterminate       100  140.6 ± 21.8  167.8 ± 27.4  128.9 ± 20.5  129.8 ± 25.8  19.5 ± 10.7   24.2 ± 8.3   27.3 ± 8.4
+                   Malignant           100  148.5 ± 16.3  172.2 ± 20.7  138.6 ± 16.7  137.1 ± 23.0  19.9 ± 15.0  23.7 ± 12.1  25.5 ± 11.5
+
+ROC-AUC of single colour features, Malignant vs Benign:
+                     brightness  mean_R  mean_G  mean_B  std_R  std_G  std_B
+image_type                                                                 
+clinical: close-up       0.420   0.558   0.379   0.372  0.486  0.532  0.536
+dermoscopic              0.524   0.575   0.501   0.459  0.368  0.347  0.336
+
+median per 11-class:
+                             brightness  mean_R  mean_G  mean_B
+image_type         dx                                         
+clinical: close-up AKIEC         132.0   175.0   119.0    93.0
+                   BCC           140.0   178.0   130.0   102.0
+                   BEN_OTH       132.0   162.0   124.0   104.0
+                   BKL           138.0   174.0   126.0   100.0
+                   DF            140.0   171.0   132.0   103.0
+                   INF           150.0   169.0   145.0   130.0
+                   MAL_OTH       130.0   168.0   118.0    96.0
+                   MEL           136.0   166.0   126.0   102.0
+                   NV            145.0   178.0   138.0   115.0
+                   SCCKA         131.0   172.0   120.0    98.0
+                   VASC          150.0   177.0   140.0   121.0
+dermoscopic        AKIEC         142.0   165.0   129.0   127.0
+                   BCC           154.0   174.0   143.0   140.0
+                   BEN_OTH       147.0   173.0   136.0   153.0
+                   BKL           139.0   156.0   131.0   127.0
+                   DF            152.0   172.0   145.0   145.0
+                   INF           154.0   172.0   143.0   154.0
+                   MAL_OTH       156.0   167.0   139.0   161.0
+                   MEL           152.0   173.0   144.0   145.0
+                   NV            147.0   163.0   140.0   143.0
+                   SCCKA         137.0   161.0   128.0   129.0
+                   VASC          143.0   162.0   134.0   149.0
+
+=== PART 3: preprocessing functions ===
+example info dict: {'source': '/Users/georgehanna/Desktop/milk10k-project/data/images/ISIC_9115886.jpg', 'original_size_wh': (600, 450), 'resize': 'shorter side + centre crop to 224x224', 'color_mode': 'rgb', 'normalize': 'scale', 'divided_by': 255, 'final_shape': (224, 224, 3), 'value_range': (0.0706, 0.8863), 'dtype': 'float32'}
+batch images: (3, 224, 224, 3)
+processed 3 image(s), skipped 2
+  skipped ISIC_DOES_NOT_EXIST: FileNotFoundError: image file not found: /Users/georgehanna/Desktop/milk10k-project/data/images/ISIC_DOES_NOT_EXIST.jpg
+  skipped corrupt_example: UnidentifiedImageError: cannot identify image file '/Users/georgehanna/Desktop/milk10k-project/outputs/session2/corrupt_example.jpg'
+
+=== PARTS 4-5: loader + visualizer ===
+images per diagnosis_1: {'Malignant': 7268, 'Benign': 2966, 'Indeterminate': 246}
+images per 11-class: {'BCC': 5044, 'NV': 1492, 'BKL': 1088, 'SCCKA': 946, 'MEL': 900, 'AKIEC': 606, 'DF': 104, 'INF': 100, 'VASC': 94, 'BEN_OTH': 88, 'MAL_OTH': 18}
+MilkLoader(10480 images, 0 unavailable, 3 classes, batch_size=16, 655 batches/epoch, shuffle=True)
+class index: {'Benign': 0, 'Indeterminate': 1, 'Malignant': 2} | class counts: {'Benign': 2966, 'Indeterminate': 246, 'Malignant': 7268}
+first batch: (16, 224, 224, 3) float32 [2 0 2 2 2 2 0 2] ['ISIC_6005871', 'ISIC_6958882']
+
+Figures saved in figures/session2/, tables in outputs/session2/

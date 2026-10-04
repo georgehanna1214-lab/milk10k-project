@@ -1,0 +1,12 @@
+# Raw dataset: too large and licensed separately. Point MILK10K_DIR to it,
+# or make `data` a symbolic link to the downloaded folder (see README).
+/data
+*.zip
+
+# Environments and caches
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store

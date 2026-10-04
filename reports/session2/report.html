@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Homework 1 - Extended EDA and Data Pipeline (MILK10k)</title>
+<style>
+  @page { size: A4; margin: 11mm 12mm 11mm 12mm; }
+  :root { --ink: #0b0b0b; --ink2: #52514e; --muted: #898781; --rule: #e1e0d9; --axis: #c3c2b7; }
+  html, body { background: #ffffff; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 8.6pt; line-height: 1.32;
+         color: var(--ink); margin: 0; }
+  h1 { font-size: 14pt; margin: 0 0 1pt; letter-spacing: -0.1pt; }
+  .byline { color: var(--ink2); font-size: 8pt; margin: 0 0 5pt; }
+  h2 { font-size: 10.4pt; margin: 7pt 0 3pt; padding-bottom: 1.5pt; border-bottom: 0.6pt solid var(--axis); }
+  h3 { font-size: 8.8pt; margin: 4pt 0 1.5pt; }
+  p { margin: 0 0 3.5pt; }
+  ul { margin: 0 0 3.5pt; padding-left: 12pt; }
+  li { margin-bottom: 1.2pt; }
+  code { font-family: Menlo, Consolas, monospace; font-size: 7.6pt; }
+  table { border-collapse: collapse; width: 100%; font-size: 7.3pt; line-height: 1.22; margin: 2pt 0 3pt; }
+  th, td { padding: 1.3pt 3.5pt; border-bottom: 0.5pt solid var(--rule); text-align: left; vertical-align: top; }
+  th { color: var(--ink2); font-weight: 600; border-bottom: 0.8pt solid var(--axis); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.leak td { background: #fbf1ec; }
+  tr.group td { font-weight: 600; color: var(--ink2); background: #f6f5f2; }
+  .caption { font-size: 7.4pt; color: var(--ink2); margin: 0 0 4pt; }
+  figure { margin: 2pt 0 4pt; break-inside: avoid; }
+  figure img { display: block; margin: 0 auto; }
+  figcaption { font-size: 7.4pt; color: var(--ink2); margin-top: 1pt; }
+  .keep { break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<h1>Homework 1 &mdash; Extended EDA and Data Pipeline for MILK10k</h1>
+<p class="byline">George Hanna &middot; Computer Vision &amp; Speech Recognition, EADA &middot; October 2026 &middot;
+code: package <code>milk10k/</code>; every figure and table is reproduced by <code>python scripts/run_session2.py</code></p>
+
+<p>MILK10k has 10,480 images (all 600&times;450 px) of 5,240 skin lesions, one dermoscopic and one clinical close-up per
+lesion. The target is <code>diagnosis_1</code>: 3,634 Malignant (69.4%), 1,483 Benign (28.3%) and 123 Indeterminate (2.3%)
+lesions; the 11-class diagnosis from <code>training_gt.csv</code> gives a finer view. <b>Main findings:</b> age and body
+site carry real but modest signal; six columns leak the label and must never be model inputs; simple colour statistics
+overlap heavily between classes (best single feature: ROC-AUC 0.66), so a model needs spatial patterns, not global
+colour.</p>
+
+<h2>1. Metadata vs. diagnosis (Part 1)</h2>
+<p><b>Method.</b> Fields that are identical for both images of a lesion (all but <code>image_type</code> and
+<code>image_manipulation</code>) are analysed with one row per lesion (n&nbsp;=&nbsp;5,240); using both images would count
+each lesion twice and overstate significance. Categorical fields: chi-square test of independence, with Cram&eacute;r's V
+as effect size (0&nbsp;=&nbsp;none, 1&nbsp;=&nbsp;perfect). Age: Kruskal&ndash;Wallis test, a rank-based one-way ANOVA,
+because age comes in coarse 5-year bins, is skewed and spreads differently per class, which breaks ANOVA's normality and
+equal-variance assumptions (classic ANOVA agrees: &eta;&sup2;&nbsp;=&nbsp;0.15). With 5,240 lesions every p-value is
+below 0.001, so fields are ranked by effect size. Missing values form their own category, so informative missingness
+is measured too.</p>
+
+<div class="keep">
+<table>
+  <thead><tr><th>Column</th><th>Type</th><th class="n">Missing</th><th>Unit</th><th>Test (3 classes)</th>
+  <th class="n">V, 3 cl.</th><th class="n">V, 11 cl.</th><th>Verdict</th></tr></thead>
+  <tbody>
+  <tr class="group"><td colspan="8">Candidate model inputs</td></tr>
+  <tr><td>age_approx</td><td>numeric</td><td class="n">0.4%</td><td>lesion</td><td>Kruskal&ndash;Wallis H&nbsp;=&nbsp;586, p&nbsp;&lt;&nbsp;10<sup>&minus;127</sup></td><td class="n">0.31*</td><td class="n">0.20*</td><td>moderate: strongest usable field</td></tr>
+  <tr><td>anatom_site_general</td><td>categorical (4)</td><td class="n">37.3%</td><td>lesion</td><td>&chi;&sup2;&nbsp;=&nbsp;260, df&nbsp;8</td><td class="n">0.16</td><td class="n">0.17</td><td>weak; missingness informative</td></tr>
+  <tr><td>image_manipulation</td><td>categorical (2)</td><td class="n">0%</td><td>image</td><td>&chi;&sup2;&nbsp;=&nbsp;202, df&nbsp;2</td><td class="n">0.14</td><td class="n">0.13</td><td>weak; acquisition proxy, bias risk</td></tr>
+  <tr><td>sex</td><td>categorical (2)</td><td class="n">0%</td><td>lesion</td><td>&chi;&sup2;&nbsp;=&nbsp;46, df&nbsp;2</td><td class="n">0.09</td><td class="n">0.12</td><td>negligible</td></tr>
+  <tr><td>anatom_site_special</td><td>categorical (2)</td><td class="n">98.0%</td><td>lesion</td><td>&chi;&sup2;&nbsp;=&nbsp;44, df&nbsp;4</td><td class="n">0.06</td><td class="n">0.14</td><td>negligible; nearly always missing</td></tr>
+  <tr><td>image_type</td><td>categorical (2)</td><td class="n">0%</td><td>image</td><td>&chi;&sup2;&nbsp;=&nbsp;0, p&nbsp;=&nbsp;1</td><td class="n">0.00</td><td class="n">0.00</td><td>none: one image of each per lesion</td></tr>
+  <tr><td>attribution, copyright_license</td><td>constant</td><td class="n">0%</td><td>lesion</td><td>&mdash;</td><td class="n">0</td><td class="n">0</td><td>useless: a single value</td></tr>
+  <tr class="group"><td colspan="8">Leak the label: never model inputs</td></tr>
+  <tr class="leak"><td>diagnosis_2 / _3 / _4</td><td>categorical</td><td class="n">0 / 1.5 / 85.5%</td><td>lesion</td><td>&chi;&sup2;&nbsp;=&nbsp;10,480 / 10,440 / 1,699</td><td class="n">1.00 / 1.00 / 0.40</td><td class="n">0.95 / 0.91 / 0.37</td><td>finer levels of the label itself</td></tr>
+  <tr class="leak"><td>melanocytic</td><td>boolean</td><td class="n">77.2%</td><td>lesion</td><td>&chi;&sup2;&nbsp;=&nbsp;897, df&nbsp;2</td><td class="n">0.41</td><td class="n">1.00</td><td>True exactly for NV and MEL</td></tr>
+  <tr class="leak"><td>diagnosis_confirm_type, concomitant_biopsy</td><td>categorical / boolean</td><td class="n">0%</td><td>lesion</td><td>&chi;&sup2;&nbsp;=&nbsp;507, df&nbsp;2</td><td class="n">0.31</td><td class="n">0.31</td><td>identical fields: was it biopsied?</td></tr>
+  </tbody>
+</table>
+<p class="caption">Table 1. Column audit and association with the label (identifiers <code>isic_id</code>, <code>lesion_id</code>
+and the target are excluded). V = Cram&eacute;r's V. *For age the 17 age bins are treated as categories, to compare it on
+the same scale; Kruskal&ndash;Wallis effect size &eta;&sup2;<sub>H</sub> = 0.11 (3 classes), 0.20 (11 classes).</p>
+</div>
+
+<figure>
+  <img src="../../figures/session2/fig1_label_mix_by_field.png" alt="Label mix by metadata field" style="width: 90%">
+  <figcaption>Figure 1. Label mix inside each category; the bold top bar is the overall mix. A field is informative
+  when its bars differ from the top bar: clearly for the leaks (<code>diagnosis_confirm_type</code>,
+  <code>melanocytic</code>) and <code>image_manipulation</code>, slightly for site and sex, not at all for
+  <code>image_type</code>.</figcaption>
+</figure>
+
+<figure>
+  <img src="../../figures/session2/fig2_age_by_class.png" alt="Age by class" style="width: 88%">
+  <figcaption>Figure 2. Benign lesions come from younger patients, driven by nevi (median 40 years) against 65&ndash;75
+  years for the malignant classes.</figcaption>
+</figure>
+
+<ul>
+  <li><b>Most associated (usable):</b> <b>age</b> (median 40 years for NV, 65 for BCC and MEL, 70 for SCCKA) and
+  <b>body site</b> (head/neck holds 6.6% Indeterminate lesions vs. &le;&nbsp;1.4% elsewhere, consistent with actinic
+  keratoses on sun-exposed skin; upper extremity is 77.7% Malignant); <b>image_manipulation</b> only with caution.</li>
+  <li><b>Least useful:</b> <code>attribution</code>, <code>copyright_license</code> (constant), <code>image_type</code>
+  (uninformative by construction), <code>sex</code> (72% vs. 65% Malignant in men vs. women),
+  <code>anatom_site_special</code> (98% missing).</li>
+  <li><b>Leakage:</b> <code>diagnosis_2/3/4</code> are the label at a finer level; <code>melanocytic</code> is True exactly
+  for nevi and melanomas; <code>diagnosis_confirm_type</code> and <code>concomitant_biopsy</code> record whether the lesion
+  was biopsied, a decision taken <i>because</i> of the suspected diagnosis (87% of lesions confirmed by clinical assessment
+  alone are Benign) and unknown when the model is used.</li>
+  <li><b>Bias and proxies:</b> &ldquo;altered&rdquo; images hold 12.8% Indeterminate lesions vs. 2.0% for &ldquo;instrument
+  only&rdquo;; the field describes how an image was captured or edited and may stand for a clinic or protocol rather than
+  the disease. A missing body site goes with more Benign lesions (34.5% vs. 28.3%), so missingness may encode the
+  contributor. Age is legitimate, but a model could lean on it (&ldquo;young patient &rarr; nevus&rdquo;) instead of the
+  image.</li>
+</ul>
+
+<h2>2. Colour and histograms across classes (Part 2)</h2>
+<p><b>Method.</b> 100 lesions per <code>diagnosis_1</code> class (seed 42, both images: 100 dermoscopic and 100 clinical
+images per class) and, for the finer view, 30 lesions per 11-class diagnosis (MAL_OTH: all 9). Per image: grey-level
+(0.299R&nbsp;+&nbsp;0.587G&nbsp;+&nbsp;0.114B) and R/G/B histograms normalised to sum to 1, so each image counts
+equally, plus the mean and standard deviation of each channel. Images are decoded at &le;&nbsp;256&nbsp;px; normalised
+histograms barely change with resolution. Dermoscopic and clinical images are always analysed separately.</p>
+
+<figure>
+  <img src="../../figures/session2/fig3_histograms_by_class.png" alt="Mean histograms per class" style="width: 92%">
+  <figcaption>Figure 3. Average histograms per class. Within each image type the curves overlap heavily; the device
+  effect (dermoscopic images are far bluer than clinical ones, right column) is larger than any class effect.</figcaption>
+</figure>
+
+<div class="keep">
+<table>
+  <thead><tr><th>Image type</th><th>Class</th><th class="n">n</th><th class="n">Brightness</th><th class="n">Mean R</th>
+  <th class="n">Mean G</th><th class="n">Mean B</th><th class="n">Std R</th><th class="n">Std G</th><th class="n">Std B</th></tr></thead>
+  <tbody>
+  <tr><td>dermoscopic</td><td>Benign</td><td class="n">100</td><td class="n">147.6 &plusmn; 20.2</td><td class="n">167.0 &plusmn; 22.4</td><td class="n">139.5 &plusmn; 21.2</td><td class="n">138.9 &plusmn; 22.5</td><td class="n">24.1</td><td class="n">31.2</td><td class="n">35.1</td></tr>
+  <tr><td></td><td>Indeterminate</td><td class="n">100</td><td class="n">140.6 &plusmn; 21.8</td><td class="n">167.8 &plusmn; 27.4</td><td class="n">128.9 &plusmn; 20.5</td><td class="n">129.8 &plusmn; 25.8</td><td class="n">19.5</td><td class="n">24.2</td><td class="n">27.3</td></tr>
+  <tr><td></td><td>Malignant</td><td class="n">100</td><td class="n">148.5 &plusmn; 16.3</td><td class="n">172.2 &plusmn; 20.7</td><td class="n">138.6 &plusmn; 16.7</td><td class="n">137.1 &plusmn; 23.0</td><td class="n">19.9</td><td class="n">23.7</td><td class="n">25.5</td></tr>
+  <tr><td>clinical close-up</td><td>Benign</td><td class="n">100</td><td class="n">145.7 &plusmn; 23.2</td><td class="n">174.1 &plusmn; 22.8</td><td class="n">137.1 &plusmn; 25.0</td><td class="n">115.3 &plusmn; 26.7</td><td class="n">20.1</td><td class="n">22.2</td><td class="n">22.3</td></tr>
+  <tr><td></td><td>Indeterminate</td><td class="n">100</td><td class="n">127.0 &plusmn; 22.5</td><td class="n">164.6 &plusmn; 26.2</td><td class="n">114.4 &plusmn; 23.0</td><td class="n">93.0 &plusmn; 22.7</td><td class="n">26.6</td><td class="n">25.9</td><td class="n">25.5</td></tr>
+  <tr><td></td><td>Malignant</td><td class="n">100</td><td class="n">140.7 &plusmn; 17.6</td><td class="n">178.1 &plusmn; 18.5</td><td class="n">128.6 &plusmn; 18.7</td><td class="n">104.4 &plusmn; 21.9</td><td class="n">18.1</td><td class="n">22.2</td><td class="n">22.4</td></tr>
+  <tr class="group"><td colspan="10">ROC-AUC of each single feature, Malignant vs. Benign</td></tr>
+  <tr><td>dermoscopic</td><td></td><td></td><td class="n">0.52</td><td class="n">0.58</td><td class="n">0.50</td><td class="n">0.46</td><td class="n">0.37</td><td class="n">0.35</td><td class="n">0.34</td></tr>
+  <tr><td>clinical close-up</td><td></td><td></td><td class="n">0.42</td><td class="n">0.56</td><td class="n">0.38</td><td class="n">0.37</td><td class="n">0.49</td><td class="n">0.53</td><td class="n">0.54</td></tr>
+  </tbody>
+</table>
+<p class="caption">Table 2. Per-image colour statistics, 0&ndash;255 scale (mean &plusmn; standard deviation across images;
+the &ldquo;Std&rdquo; columns are means of the per-image standard deviations). ROC-AUC: 0.5 = complete overlap; below
+0.5 = lower values in Malignant images.</p>
+</div>
+
+<figure>
+  <img src="../../figures/session2/fig4_color_stats_by_11class.png" alt="Colour statistics by 11-class diagnosis" style="width: 86%">
+  <figcaption>Figure 4. Per-image colour statistics by 11-class diagnosis (30 lesions per class; MAL_OTH 9). The boxes
+  overlap for almost every pair of classes.</figcaption>
+</figure>
+
+<ul>
+  <li><b>Within an image type, Benign and Malignant overlap almost completely:</b> mean brightness differs by
+  &le;&nbsp;5 grey levels (dermoscopic 147.6 vs. 148.5, clinical 145.7 vs. 140.7) while images of one class spread by
+  16&ndash;23 levels. No single colour feature exceeds ROC-AUC 0.66 (dermoscopic Std B, 0.34 read the other way).</li>
+  <li><b>Indeterminate lesions</b> (all actinic keratoses) are the clearest outlier in clinical images: darker (127 vs.
+  141&ndash;146), with less green and blue, i.e. redder.</li>
+  <li><b>Malignant dermoscopic images vary less in colour</b> (Std B 25.5 vs. 35.1): benign classes include pigmented
+  nevi, a dark lesion on light skin, while 69% of malignant lesions are BCC, typically pink and low-contrast. This is a
+  class-composition effect, not a property of malignancy.</li>
+  <li><b>11 classes:</b> AKIEC, SCCKA and BKL have the darkest, least blue dermoscopic images (median brightness
+  137&ndash;142, mean B 127&ndash;129, vs. 147&ndash;156 and 140&ndash;161 for most other classes).</li>
+</ul>
+<p><b>Other explanations than &ldquo;the diagnosis causes the colour&rdquo;.</b> (1) The lesion often fills a small part
+of the frame, so whole-image statistics mostly measure the surrounding skin: skin tone, sun damage and the redness of
+the body site, while site and age differ by class (actinic keratoses and SCC on sun-damaged heads of older patients).
+(2) Acquisition: dermoscope (contact plate, polarised light, dark corners, rulers, ink) vs. camera, plus lighting,
+white balance and devices that differ by clinic while the class mix also differs by clinic (see the
+<code>image_manipulation</code> and missing-site patterns). (3) Sampling: the sample is balanced per class, but the
+boxes of DF, INF, VASC, BEN_OTH (30 lesions) and MAL_OTH (9) are noisy.</p>
+<p><b>Conclusion.</b> Colour and brightness alone are a weak signal: the distributions overlap heavily, the best single
+feature reaches AUC 0.66, and part of that comes from class composition and acquisition rather than pathology. The
+project needs features that capture spatial structure (borders, pigment network, vessels, texture), i.e. a CNN, with
+only mild colour augmentation so the little colour signal is not erased. Because the image-type gap is larger than
+any class gap, both image types must be represented in every class and split, or handled explicitly.</p>
+
+<h2>3. Reusable pipeline (Parts 3&ndash;5)</h2>
+<p><b>Design.</b> All code is one importable package, <code>milk10k/</code>, with a module per part:
+<code>preprocessing</code>, <code>loader</code>, <code>visualize</code> (and <code>metadata_analysis</code>,
+<code>color_analysis</code> for Parts 1&ndash;2). <code>config.py</code> is the only place with paths (environment variable
+<code>MILK10K_DIR</code>, default <code>data/</code> in the repository, so no absolute paths), the seed (42) and the image
+size (224). Scripts and notebooks only <i>call</i> these functions, so later milestones extend them (splits, torchvision
+transforms) instead of copying code. Eleven <code>pytest</code> tests check shapes, value ranges, skipping of bad files,
+the available-only filter and reproducible shuffling.</p>
+<p><b>Preprocessing.</b> <code>preprocess_image(source, size=224, color_mode="rgb"|"gray"|"hsv",
+normalize="scale"|"minmax"|"zscore"|"none", keep_aspect=True)</code> takes a file path, uint8 array or PIL image and returns
+<code>(array, info)</code>: a float32 (H, W, C) array plus a dict with the original size, final shape, options and value
+range. Resizing scales the shorter side to 224 and cuts the centre square, so lesion shape (asymmetry, border) is not
+distorted; the trimmed edges are mostly skin and dark dermoscope corners. Default normalisation divides by 255, i.e.
+min-max scaling with the fixed 0&ndash;255 range: it fits no statistics (no test information can leak), keeps real
+brightness differences between images, and matches torchvision's <code>ToTensor</code>. Per-image min-max would stretch
+every image's contrast and erase those differences (Figure 5, last column); z-score is available with a mean/std that
+must come from the training split. <code>preprocess_batch(items)</code> takes metadata rows (DataFrame) or a list of paths
+and returns <code>BatchResult(images (N, H, W, C), ids, infos, skipped)</code>. A missing or corrupt file is skipped with
+its reason (demo: 3 processed; 2 skipped with <code>FileNotFoundError</code> and <code>UnidentifiedImageError</code>); a
+wrong option raises at once instead of silently skipping every image.</p>
+
+<figure>
+  <img src="../../figures/session2/fig5_preprocessing_before_after.jpg" alt="Preprocessing before and after" style="width: 84%">
+  <figcaption>Figure 5. Raw image (left) and processed versions with shape and value range: centre crop vs. stretch,
+  greyscale, and per-image min-max, which changes each image's overall colour.</figcaption>
+</figure>
+
+<div class="keep">
+<table>
+  <thead><tr><th style="width: 14%">MilkLoader</th><th>Interface (Part 4)</th></tr></thead>
+  <tbody>
+  <tr><td>Construct</td><td><code>MilkLoader(metadata, img_dir=None, label_col="diagnosis_1", batch_size=32, shuffle=True, seed=42,
+      classes=None, drop_last=False, **preprocess_options)</code></td></tr>
+  <tr><td>Available only</td><td>keeps the rows whose .jpg exists on disk (10,480 of 10,480 here); <code>n_unavailable</code> counts the rest</td></tr>
+  <tr><td>Iterate</td><td><code>for images, labels, ids in loader:</code> &rarr; images (B, 224, 224, 3) float32 &middot; labels (B,) int64 &middot;
+      ids = list of <code>isic_id</code>; one pass = one epoch</td></tr>
+  <tr><td>Labels</td><td><code>loader.classes</code> = ["Benign", "Indeterminate", "Malignant"] &rarr; 0, 1, 2</td></tr>
+  <tr><td>Memory, speed</td><td>images are read and processed batch by batch, never all at once; 1.9 ms per image, about 20 s per epoch</td></tr>
+  <tr><td>Order</td><td>new shuffle every epoch from <code>seed + epoch</code>: different each epoch, identical across runs</td></tr>
+  <tr><td>Helpers</td><td><code>len(loader)</code> = batches per epoch (328 at batch size 32); <code>class_counts()</code>; <code>skipped</code> = (id, reason) pairs</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><b>Visualizer.</b> <code>show_grid</code> plots images with their labels as titles from a list of arrays or straight
+from a loader batch (Figure 7); <code>plot_class_balance</code> draws counts and percentages per class (Figure 6);
+<code>plot_batch_summary</code> plots the per-channel value distribution of a processed batch next to raw/processed pairs,
+to confirm the normalisation (values stay within [0, 1]; saved as <code>figures/session2/fig8_batch_summary.jpg</code>).</p>
+
+<figure>
+  <img src="../../figures/session2/fig6_class_balance.png" alt="Class balance" style="width: 80%">
+  <figcaption>Figure 6. Images per class (each lesion contributes 2 images).</figcaption>
+</figure>
+<p><b>Class balance.</b> The data are strongly imbalanced: 69.4% of images are Malignant and 2.3% Indeterminate
+(30&nbsp;:&nbsp;1); among the 11 classes BCC alone is 48.1% and MAL_OTH 0.2% (18 images, 280&nbsp;:&nbsp;1). All 123
+Indeterminate lesions are actinic keratoses (AKIEC), a class that also holds 180 Malignant lesions. Consequences:
+accuracy misleads (always answering &ldquo;Malignant&rdquo; scores 69%), so I will report balanced accuracy, macro-F1 and
+per-class recall; splits must be stratified and grouped by lesion; training needs class weights or oversampling; the
+rarest classes may need merging. The imbalance reflects biopsy-based collection, not real-world prevalence.</p>
+
+<figure>
+  <img src="../../figures/session2/fig7_loader_batch.jpg" alt="One loader batch" style="width: 88%">
+  <figcaption>Figure 7. First batch from <code>MilkLoader</code> (batch size 16), drawn with <code>show_grid</code>.</figcaption>
+</figure>
+
+</body>
+</html>
