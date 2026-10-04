@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Milestone 1 - Data pipeline (MILK10k)</title>
+<style>
+  @page { size: A4; margin: 11mm 12mm 11mm 12mm; }
+  :root { --ink: #0b0b0b; --ink2: #52514e; --rule: #e1e0d9; --axis: #c3c2b7; }
+  html, body { background: #ffffff; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 8.5pt; line-height: 1.3; color: var(--ink); margin: 0; }
+  h1 { font-size: 13.5pt; margin: 0 0 1pt; }
+  .byline { color: var(--ink2); font-size: 7.9pt; margin: 0 0 4pt; }
+  h2 { font-size: 9.8pt; margin: 6pt 0 2pt; padding-bottom: 1pt; border-bottom: 0.6pt solid var(--axis); }
+  p { margin: 0 0 3pt; }
+  ul { margin: 0 0 3pt; padding-left: 12pt; }
+  li { margin-bottom: 1pt; }
+  code { font-family: Menlo, Consolas, monospace; font-size: 7.5pt; }
+  table { border-collapse: collapse; width: 100%; font-size: 7.4pt; line-height: 1.2; margin: 2pt 0 3pt; }
+  th, td { padding: 1.2pt 3.5pt; border-bottom: 0.5pt solid var(--rule); text-align: left; vertical-align: top; }
+  th { color: var(--ink2); font-weight: 600; border-bottom: 0.8pt solid var(--axis); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .keep { break-inside: avoid; }
+</style>
+</head>
+<body>
+<h1>Milestone 1 &mdash; A leak-free, reproducible data pipeline for MILK10k</h1>
+<p class="byline">George Hanna &middot; Computer Vision &amp; Speech Recognition, EADA &middot; 4 October 2026 &middot;
+reproduce with <code>python scripts/run_milestone1.py</code> (all numbers below come from its log)</p>
+
+<p><b>Summary.</b> All 10,480 images exist and verify; the target <code>diagnosis_1</code> keeps three classes; the data are
+split 70/15/15 <i>by lesion</i> with zero overlap and &le;&nbsp;0.6&nbsp;pp class drift; train is imbalanced 27.6&nbsp;:&nbsp;1 and
+both a class-weighted loss and a weighted sampler are ready; images enter the model at 224&times;224 with train-only
+normalisation and label-safe augmentation.</p>
+
+<h2>1. Label strategy</h2>
+<p><b>Primary target: <code>diagnosis_1</code> with three classes.</b> Malignant 3,634 lesions (69.4%), Benign 1,483
+(28.3%), Indeterminate 123 (2.3%). All Indeterminate lesions are actinic keratoses (AKIEC, which also holds 180
+malignant SCC in situ). <i>Dropping</i> them would leave the model unable to handle a lesion type it will meet in
+practice; <i>merging</i> them into Malignant is defensible (both lead to treatment) but hides the only pre-cancerous
+group, which is managed differently (cryotherapy or topical therapy rather than excision). I keep the class and handle
+its rarity with weights or sampling. Confusing Indeterminate with Malignant is clinically cheap (both trigger action),
+so a secondary binary view, "needs action" (Malignant or Indeterminate) vs. Benign, is stored for clinical reporting.
+<b>11-class stretch goal:</b> DF (52), INF (50) and VASC (47) are kept and up-weighted, since each has a distinct
+appearance. MAL_OTH (9 lesions: 6 train, 3 val, 0 test) can be neither learned nor evaluated, and its balanced weight
+(&asymp;&nbsp;53) would destabilise training. It is merged with BEN_OTH (44) into <b>OTHER</b> (53 lesions, read as "unusual
+lesion &rarr; refer"), giving 10 classes. The trade-off: OTHER mixes benign and malignant, so it must never be read as
+"benign". The mapping is saved in <code>artifacts/label_map.json</code>.</p>
+
+<h2>2. Split design and verification</h2>
+<div class="keep">
+<table>
+  <thead><tr><th>Split</th><th class="n">Lesions</th><th class="n">Share</th><th class="n">Images</th><th class="n">Malignant</th><th class="n">Benign</th><th class="n">Indeterminate</th><th>Rare 11-class lesions (DF / INF / VASC / BEN_OTH / MAL_OTH)</th></tr></thead>
+  <tbody>
+  <tr><td>train</td><td class="n">3,667</td><td class="n">70.0%</td><td class="n">7,334</td><td class="n">69.2%</td><td class="n">28.3%</td><td class="n">2.5%</td><td>36 / 35 / 33 / 31 / 6</td></tr>
+  <tr><td>val</td><td class="n">787</td><td class="n">15.0%</td><td class="n">1,574</td><td class="n">69.8%</td><td class="n">28.5%</td><td class="n">1.8%</td><td>8 / 7 / 8 / 7 / 3</td></tr>
+  <tr><td>test</td><td class="n">786</td><td class="n">15.0%</td><td class="n">1,572</td><td class="n">69.6%</td><td class="n">28.2%</td><td class="n">2.2%</td><td>8 / 8 / 6 / 6 / 0</td></tr>
+  </tbody>
+</table>
+</div>
+<p><code>split_lesions()</code> runs <b>StratifiedGroupKFold at lesion level</b> (groups = <code>lesion_id</code>, stratified on
+the 11 classes): it cuts 20 stratified folds of 5% each, then 3 folds become test and 3 become val (seed 42, created
+2026-10-04). Images are assigned afterwards by lesion. Verified in code: zero <code>lesion_id</code> overlap between every
+pair of splits; every lesion has exactly 2 images in its split, one dermoscopic and one clinical; the largest
+deviation from the global class proportions is 0.21&nbsp;pp over the 11 classes and 0.57&nbsp;pp for
+<code>diagnosis_1</code> (Indeterminate). A property test over 10 seeds (no overlap, sizes within &plusmn;1&nbsp;pp,
+reproducible) passes. The files are <code>splits/train.csv</code>, <code>val.csv</code> and <code>test.csv</code>, one row per
+image.</p>
+
+<h2>3. Class imbalance on TRAIN and how it is handled</h2>
+<p>Train holds 5,076 Malignant, 2,074 Benign and 184 Indeterminate images: an <b>imbalance ratio of 27.6&nbsp;:&nbsp;1</b>
+(Malignant to Benign: 2.4&nbsp;:&nbsp;1). Two corrections are implemented, to be used one at a time (together
+they would correct twice):</p>
+<ul>
+  <li><b>Class-weighted loss:</b> weights n&nbsp;/&nbsp;(K&nbsp;&middot;&nbsp;count) from train only: Benign 1.18,
+  Indeterminate 13.29, Malignant 0.48 (<code>artifacts/class_weights.json</code>).</li>
+  <li><b>WeightedRandomSampler:</b> in 20 train batches the label counts move from 177 / 16 / 447
+  (Benign / Indeterminate / Malignant, plain shuffle) to 224 / 215 / 201.</li>
+</ul>
+<p>Evaluation uses balanced accuracy, macro-F1 and per-class recall per lesion, never plain accuracy (always answering
+"Malignant" already scores 69%).</p>
+
+<h2>4. Quality issues found and how they are handled</h2>
+<ul>
+  <li><b>Files:</b> every row resolves to an image (0 missing) and <code>Image.verify()</code> finds 0 unreadable files;
+  all images are 600&times;450 RGB (<code>outputs/milestone1/image_size_summary.csv</code>). The Session 2 loader and the new
+  <code>MilkDataset</code> now <b>fail loudly</b> on a missing file (<code>FileNotFoundError</code>) unless
+  <code>allow_missing=True</code> is passed explicitly.</li>
+  <li><b>Missing values:</b> <code>anatom_site_general</code> is 37.3% missing, but 3,850 of the 3,912 "missing" images are
+  <b>trunk</b> lesions in <code>supplements/training_input.csv</code>: the column simply has no trunk category. Site is
+  recovered as "trunk", with "unknown" for the other 62 images. Age (0.4% missing) is imputed with the train median if
+  used. <code>anatom_site_special</code> (98% missing) is dropped. Missing values in <code>diagnosis_3/4</code> and
+  <code>melanocytic</code> mean "not applicable".</li>
+  <li><b>Leakage and shortcuts:</b> <code>diagnosis_2/3/4</code>, <code>melanocytic</code> (True exactly for NV and MEL),
+  <code>diagnosis_confirm_type</code> and <code>concomitant_biopsy</code> (identical columns; 87% of lesions that were not
+  biopsied are benign) leak the label and are never inputs. <code>image_type</code> is label-free (one image of each type per
+  lesion). <code>image_manipulation="altered"</code> is 12.8% Indeterminate vs. 2.0%, so it is not an input and is monitored as
+  a possible shortcut. File size carries no label signal (ROC-AUC 0.48&ndash;0.51).</li>
+</ul>
+
+<h2>5. Preprocessing choices</h2>
+<p><b>Resolution 224&times;224:</b> 100% of the images are larger (600&times;450), so 224 is a 2&times; downscale with no
+upsampling, and it is the native input of ImageNet-pretrained CNNs. Evaluation resizes the shorter side to 224 and
+crops the centre (no shape distortion). <b>Normalisation</b> uses statistics from the 7,334 <i>train</i> images only:
+mean [0.685, 0.527, 0.477], std [0.122, 0.131, 0.152] (<code>artifacts/norm_stats.json</code>).
+<code>eval_transform</code> is deterministic (asserted on two passes over the same image).
+<b>Two images per lesion:</b> I chose <b>(a)</b>: each image is a training sample with its lesion's label (twice the
+data, both views learned), and at evaluation the two views' probabilities are averaged per lesion
+(<code>aggregate_predictions</code>). The alternatives: <b>(b)</b> one image type only (dermoscopic is the most
+standardised, but this halves the data and drops the clinical context); <b>(c)</b> both views as one sample in a
+two-branch model (<code>LesionDataset</code>, already written): the best use of the information, but it needs both
+images at inference and a larger model, so it is kept for a later milestone. <b>Leakage risk if evaluated per
+image:</b> each lesion would count twice, giving over-confident metrics and two different answers for one patient.
+Had the <i>split</i> been made per image, 80% of test images would have their twin in train (Part A, A3.1).</p>
+<div class="keep">
+<table>
+  <thead><tr><th>Augmentation (train only)</th><th>Parameters</th><th>Why the label does not change</th></tr></thead>
+  <tbody>
+  <tr><td>RandomResizedCrop</td><td>224, scale 0.75&ndash;1.0</td><td>keeps &ge;&nbsp;75% of the image: the (centred) lesion stays in view; mimics distance or zoom</td></tr>
+  <tr><td>Horizontal + vertical flip</td><td>p = 0.5 each</td><td>a lesion on the skin has no left/right or canonical "up"</td></tr>
+  <tr><td>RandomRotate90</td><td>0/90/180/270&deg;</td><td>the dermoscope can be held at any angle; no interpolation, no black corners</td></tr>
+  <tr><td>ColorJitter</td><td>brightness 0.1, contrast 0.1, saturation 0.05, <b>hue 0</b></td><td>within normal lighting variation; Part A (A3.5) showed any hue jitter (&ge;&nbsp;7&deg;) exceeds the 5&deg; Benign/Malignant hue gap</td></tr>
+  </tbody>
+</table>
+</div>
+<figure style="margin: 3pt 0 2pt; break-inside: avoid;">
+  <img src="../../figures/milestone1/augmentations.jpg" alt="Augmentation examples" style="display: block; width: 100%;">
+  <figcaption style="font-size: 7.3pt; color: #52514e;">Figure 1. One original and 7 outputs of
+  <code>train_transform</code> for MEL, BCC and the rare VASC: the lesion and its colours are preserved.</figcaption>
+</figure>
+<figure style="margin: 3pt 0 2pt; break-inside: avoid;">
+  <img src="../../figures/milestone1/train_batch.jpg" alt="A train batch" style="display: block; width: 100%;">
+  <figcaption style="font-size: 7.3pt; color: #52514e;">Figure 2. Visual check of a train batch from the DataLoader
+  (de-normalised for display), drawn with the Session 2 <code>show_grid</code>; titles are the labels and image ids.</figcaption>
+</figure>
+
+<h2>6. What could still go wrong</h2>
+<p><b>Residual leakage:</b> MILK10k has no patient identifier, so different lesions of the same patient (same skin,
+camera and day) can land in different splits; near-duplicate photos across lesions have not been searched for yet
+(e.g. with perceptual hashes); some images show surgical pen marks around the lesion (Figure 2, first image), a known shortcut in dermatology AI that has not been audited yet; and the test split must be used once, after all tuning on validation.
+<b>Biases:</b> the data are biopsy-enriched (69% malignant; benign lesions are the suspicious ones), so predicted
+probabilities will be too high in a normal clinic and need recalibration. All images come from one study team, so
+devices, clinics and populations are narrow, and skin-tone coverage (<code>skin_tone_class</code> in the supplements) has
+not yet been checked. Rare classes (Indeterminate 123, INF 50, VASC 47 lesions) give noisy per-class estimates.
+<b>What a clinician should know:</b> this model judges lesions <i>that were already referred for biopsy</i>; it has not
+been validated on unselected lesions, other devices or darker skin types; it is a second opinion that may prioritise
+a biopsy, never a reason to skip one.</p>
+</body>
+</html>
