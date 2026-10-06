@@ -11,6 +11,7 @@ jupyter>=1.0        #         runs homework_part_a.ipynb
 nbconvert>=7.0      #         executes / exports the notebook
 ipykernel>=6.0      #         notebook kernel
 pytest>=8.0         #         tests
+scikit-image>=0.24  # (0.26)  reference Canny to check the from-scratch one (session4_homework.ipynb)
 
 # the project's own code (milk10k/ package), installed in editable mode
 -e .

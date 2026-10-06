@@ -1,0 +1,138 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Session 4 Homework — George Hanna</title>
+<style>
+@page { size: A4; margin: 15mm 15mm 14mm 15mm; }
+body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; line-height: 1.42; color: #0b0b0b; }
+h1 { font-size: 17pt; margin: 0 0 2px; }
+h2 { font-size: 12.5pt; margin: 16px 0 4px; border-bottom: 1.5px solid #e1e0d9; padding-bottom: 3px; break-after: avoid; }
+.meta { color: #52514e; font-size: 9pt; margin-bottom: 8px; }
+.question { background: #f4f3ef; border-left: 3px solid #2a78d6; padding: 6px 10px; margin: 6px 0 8px; font-size: 9.3pt; }
+.links { font-size: 9pt; background: #f4f3ef; padding: 6px 10px; }
+a { color: #2a78d6; text-decoration: none; }
+ul { margin: 4px 0; padding-left: 18px; } li { margin: 2px 0; } p { margin: 5px 0; }
+figure { margin: 8px 0; text-align: center; break-inside: avoid; }
+figcaption { font-size: 8.3pt; color: #52514e; margin-top: 2px; }
+table { border-collapse: collapse; font-size: 8.8pt; margin: 6px 0; break-inside: avoid; }
+th, td { border-bottom: 1px solid #e1e0d9; padding: 3px 8px; text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+th { background: #f4f3ef; }
+code { font-size: 8.8pt; background: #f4f3ef; padding: 0 3px; border-radius: 3px; }
+.pagebreak { break-before: page; }
+</style></head><body>
+
+<h1>Session 4 Homework — Filters, Gaussian blur, Canny</h1>
+<div class="meta">George Hanna · Computer Vision &amp; Speech Recognition (EADA) · dataset: MILK10k · October 2026</div>
+<div class="links"><b>Code:</b> notebook <a href="https://github.com/georgehanna1214-lab/milk10k-project/blob/main/session4_homework.ipynb">session4_homework.ipynb</a> in my repository
+<a href="https://github.com/georgehanna1214-lab/milk10k-project">github.com/georgehanna1214-lab/milk10k-project</a>. All images come from the <b>training split</b> of Milestone 1
+(no validation/test lesions); seed 42.</div>
+
+<h2>1. Filters on lesions from different diagnosis classes</h2>
+<div class="question">Apply a set of filters to different MILK10k images from different diagnosis classes. Do edges or
+textures look visually different between malignant and benign lesions?</div>
+<p><b>Method.</b> 786 dermoscopic training images (one per lesion): 150 each of nevus (NV), benign keratosis (BKL),
+melanoma (MEL), basal cell carcinoma (BCC) and squamous cell carcinoma (SCCKA), plus all 36 dermatofibromas (DF).
+Filters: Gaussian blur, sharpen, Sobel magnitude and outline. On the central half of each image (where the lesion is)
+I measured the <b>edge strength</b> (mean Sobel magnitude), the <b>fine texture</b> (mean |outline|) and the
+<b>contrast</b> (standard deviation). <b>AUC</b> = probability that an image of the first group has a higher value
+than one of the second (0.5 = no difference).</p>
+<table>
+<tr><th>Comparison</th><th>edge strength AUC</th><th>fine texture AUC</th><th>contrast AUC</th></tr>
+<tr><td>Malignant vs. Benign (all 6 diagnoses)</td><td>0.51 (p = 0.5)</td><td>0.50 (p = 1)</td><td>0.46</td></tr>
+<tr><td>Melanoma vs. nevus</td><td><b>0.63</b> (p = 8·10⁻⁵)</td><td><b>0.63</b> (p = 2·10⁻⁴)</td><td>0.44 (p = 0.09)</td></tr>
+<tr><td>BCC vs. nevus</td><td>0.27</td><td>0.28</td><td><b>0.11</b></td></tr>
+</table>
+<figure><img src="../../figures/session4_homework/part1_boxplots.png" style="width:92%"><figcaption>Edge strength and fine texture per diagnosis (boxes = middle 50% of images, line = median).</figcaption></figure>
+<figure><img src="../../figures/session4_homework/part1_examples.jpg" style="width:80%"><figcaption>A typical image per diagnosis (edge strength closest to the class median), central half. Sobel and |outline| share one grey scale across rows: brighter = stronger edges / more texture.</figcaption></figure>
+<p><strong>Not as a simple Benign vs. Malignant split, but yes for specific diagnoses.</strong></p>
+<ul>
+<li><strong>Benign vs. Malignant (pooled): no difference.</strong> AUC 0.51 for edge strength and 0.50 for fine texture (p = 0.5
+and 1). &quot;Malignant&quot; mixes opposite cases that cancel out: <strong>BCC is the smoothest class</strong> (median edge strength
+17.5, the lowest) and <strong>melanoma the most textured</strong> (28.5, the highest).</li>
+<li><strong>Melanoma vs. nevus</strong> (both melanocytic, the clinically important pair): melanomas have <strong>stronger edges and
+more fine texture</strong> (median 28.5 vs. 23.8 and 14.9 vs. 12.7; AUC 0.63 for both, p &lt; 0.001), while their overall
+contrast is the same (AUC 0.44, p = 0.09). The difference is in the lesion's <em>structure</em> (more and sharper local
+changes), not just a darker lesion. In the typical examples the melanoma row has the brightest Sobel and outline
+maps on the shared scale (edge strength 28.2, texture 15.1).</li>
+<li><strong>BCC vs. nevus:</strong> BCCs have weaker edges (AUC 0.27), but above all <strong>much lower contrast</strong> (AUC 0.11). In
+grayscale a BCC is a faint, low-contrast lesion, so all its edge maps are dark.</li>
+</ul>
+<p><strong>Caveat.</strong> AUC 0.63 still means a large overlap: a melanoma has a higher edge strength than a random nevus only
+63% of the time. One hand-made filter statistic is a weak feature on its own. Hairs, lighting and image contrast
+also change it. Telling the classes apart needs many features combined (Session 5) or filters learned from the
+data (CNN).</p>
+
+
+<h2>2. Gaussian blur: what <code>sigma</code> controls</h2>
+<div class="question">Read the <code>scipy.ndimage.gaussian_filter</code> documentation and identify what the sigma
+parameter controls. Experiment with different values of sigma and observe the effect.</div>
+<p><b>From the documentation (SciPy 1.17).</b> <code>sigma</code>: <i>"Standard deviation for Gaussian kernel. The
+standard deviations of the Gaussian filter are given for each axis as a sequence, or as a single number, in which case
+it is equal for all axes."</i> The kernel is cut at <code>truncate</code> = 4 standard deviations (radius
+<code>round(truncate·sigma)</code>, size <code>2·radius + 1</code>), and the 2-D filter is computed as one 1-D filter
+per axis.</p>
+<figure><img src="../../figures/session4_homework/part2_kernel_profiles.png" style="width:62%"><figcaption>1-D Gaussian weights for σ = 1, 2, 4, 8.</figcaption></figure>
+<figure><img src="../../figures/session4_homework/part2_sigma_series.jpg" style="width:100%"><figcaption>Lesion ISIC_0073863 (the lesion used in class) blurred with increasing σ; bottom row: zoom on the left border.</figcaption></figure>
+<table>
+<tr><th>σ</th><th>0 (original)</th><th>0.5</th><th>1</th><th>2</th><th>4</th><th>8</th></tr>
+<tr><td>kernel size</td><td>–</td><td>5×5</td><td>9×9</td><td>17×17</td><td>33×33</td><td>65×65</td></tr>
+<tr><td>edge strength left</td><td>100%</td><td>91%</td><td>72%</td><td>50%</td><td>34%</td><td>25%</td></tr>
+</table>
+<figure><img src="../../figures/session4_homework/part2_sigma_per_axis.jpg" style="width:85%"><figcaption>sigma as a sequence: one standard deviation per axis.</figcaption></figure>
+<p><strong><code>sigma</code> is the standard deviation of the Gaussian kernel, in pixels; it sets the <em>scale</em> of the blur.</strong> It can be
+one value or one value per axis.</p>
+<ul>
+<li>A larger σ gives a <strong>wider bell</strong> (kernel-profile figure): the weight is spread over more pixels and the centre
+pixel counts less. With the default <code>truncate=4.0</code> the kernel grows from 5×5 (σ = 0.5) to 65×65 (σ = 8).</li>
+<li>So each output pixel averages a <strong>larger neighbourhood</strong>, and structures smaller than about σ are averaged away.
+On lesion ISIC_0073863 the remaining edge strength is 91% at σ = 0.5, 72% at σ = 1, <strong>50% at σ = 2</strong>, 34% at
+σ = 4 and 25% at σ = 8.</li>
+<li><strong>Small σ (0.5–1)</strong> removes pixel-level noise but keeps most of the lesion's detail. <strong>Large σ (4–8)</strong>
+keeps only the large-scale structure, i.e. the dark lesion against the skin; the fine internal structure is gone.</li>
+<li><strong>σ per axis</strong>: <code>sigma=(0, 8)</code> blurs only left ↔ right and <code>sigma=(8, 0)</code> only up ↔ down, which stretches the image
+into streaks along one direction.</li>
+<li>The documentation's description is exact: a 2-D kernel built from the Gaussian formula with radius <code>round(4σ)</code>
+reproduces <code>gaussian_filter</code> to 10⁻¹². The filter is separable, i.e. computed as one 1-D pass per axis.</li>
+</ul>
+<p><strong>In practice</strong> σ is chosen from the size of the details to ignore. It is also the first step of Canny (Part 3),
+where it decides which scale of edges is found.</p>
+
+
+<h2>3. Canny edge detection, implemented from scratch</h2>
+<div class="question">Read about the Canny edge detector and implement it in Python as a function. Apply your function
+to one MILK10k image and compare the result with a Sobel edge detector. Briefly describe the main differences.</div>
+<p><b>Implementation</b> (function <code>canny(image, sigma=2.0, low=0.80, high=0.95)</code> in the notebook), in
+Canny's five steps: (1) Gaussian smoothing with σ; (2) Sobel gradient magnitude and direction; (3) non-maximum
+suppression, keeping a pixel only if it is the largest of its two neighbours along the gradient direction (rounded to
+0°, 45°, 90°, 135°); (4) double threshold, with strong edges in the top 5% of the gradient and weak edges in the top
+20%; (5) hysteresis, keeping the weak pixels connected to a strong one. Applied to lesion ISIC_0073863.</p>
+<figure><img src="../../figures/session4_homework/part3_canny_vs_sobel.jpg" style="width:100%"><figcaption>Sobel magnitude, Sobel thresholded at the top 5%, and my Canny (σ = 2); bottom row: zoom on the left border.</figcaption></figure>
+<table>
+<tr><th></th><th>Sobel, top 5%</th><th>Canny (σ = 2)</th></tr>
+<tr><td>edge pixels (% of the image)</td><td>5.06%</td><td>2.50%</td></tr>
+<tr><td>connected pieces</td><td>1,099</td><td>171</td></tr>
+<tr><td>median piece size</td><td>3 px</td><td>28 px</td></tr>
+<tr><td>isolated dots (1–2 px)</td><td>545</td><td>10</td></tr>
+</table>
+<figure><img src="../../figures/session4_homework/part3_canny_sigma.jpg" style="width:92%"><figcaption>Canny with σ = 1, 2, 4 (same thresholds).</figcaption></figure>
+<p>My <code>canny</code> agrees with <code>skimage.feature.canny</code> (97% of edge pixels within 1 pixel, in both directions, and almost
+the same number of edge pixels: 2.50% vs. 2.46%).</p>
+<ol>
+<li><strong>Output.</strong> Sobel gives a <em>grey-level</em> map: how strong the change is at every pixel. Canny gives a <em>binary</em>
+map: edge or not.</li>
+<li><strong>Thickness.</strong> Sobel edges are <strong>thick bands</strong> several pixels wide, because the gradient is high on both sides
+of an edge. Canny keeps only the ridge (non-maximum suppression), so its edges are <strong>1-pixel lines</strong>. At the same
+top-5% level, thresholded Sobel marks 5.06% of the pixels and Canny 2.50%.</li>
+<li><strong>Continuity and noise.</strong> Thresholded Sobel falls apart into <strong>1,099 pieces</strong> (median 3 pixels), 545 of them
+isolated 1–2-pixel dots from texture, noise and JPEG blocks. Thanks to the Gaussian smoothing and hysteresis,
+Canny gives <strong>171 connected contours</strong> (median 28 pixels) with only 10 isolated dots. The lesion outline and its
+internal structures become continuous lines.</li>
+<li><strong>Control.</strong> Sobel is a fixed 3×3 scale, and any threshold has to be chosen afterwards. Canny has a scale (σ)
+and two thresholds: σ = 1 marks 4.7% of the pixels in 396 pieces (fine internal detail), σ = 2 2.5% in 171, and
+σ = 4 1.15% in 76 (mostly the main outlines).</li>
+<li><strong>Relation and cost.</strong> Sobel is step 2 <em>inside</em> Canny. Canny adds smoothing, thinning and connectivity, which
+costs more computation but gives a cleaner, ready-to-use edge map.</li>
+</ol>
+<p><strong>For the project.</strong> Canny's clean, connected contours suit measuring the <strong>shape of the lesion border</strong> (border
+irregularity). Sobel's magnitude suits <strong>texture statistics</strong> such as the mean edge strength used in Part 1.</p>
+
+</body></html>
